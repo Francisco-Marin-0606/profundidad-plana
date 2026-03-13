@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, createContext, useContext } from "react";
 import { motion } from "motion/react";
 import {
   ExternalLink,
@@ -7,6 +7,46 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { SiteContent } from "./types";
+
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: (() => void) | undefined;
+  }
+}
+
+let ytApiLoaded = false;
+let ytApiLoading = false;
+const ytApiCallbacks: (() => void)[] = [];
+
+function loadYouTubeAPI(): Promise<void> {
+  if (ytApiLoaded) return Promise.resolve();
+  return new Promise((resolve) => {
+    ytApiCallbacks.push(resolve);
+    if (ytApiLoading) return;
+    ytApiLoading = true;
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => {
+      ytApiLoaded = true;
+      ytApiCallbacks.forEach((cb) => cb());
+      ytApiCallbacks.length = 0;
+    };
+  });
+}
+
+type PlayerRegistry = {
+  register: (id: string, player: any) => void;
+  unregister: (id: string) => void;
+  pauseAllExcept: (id: string) => void;
+};
+
+const PlayerRegistryContext = createContext<PlayerRegistry>({
+  register: () => {},
+  unregister: () => {},
+  pauseAllExcept: () => {},
+});
 
 const DEFAULT_SETTINGS = {
   hero_image: "/hero-bg.png",
@@ -20,6 +60,22 @@ const DEFAULT_SETTINGS = {
     "Depth Flatness arises from the images we see on screens, photographs, or other visual media. They are two-dimensional flat surfaces that represent three-dimensional objects or scenes using visual techniques to create the illusion of depth. Although the images may appear three-dimensional, they are actually flat representations of reality.",
   contact_tagline: "I'd love to collaborate with some new ideas.",
 };
+
+const FALLBACK_VIDEOS = [
+  "cym9fuUvRXw", "GdiavfuAoro", "nGewDPG5XfQ", "3jPhs0kMc6U",
+  "A8z4u9f_GJE", "vrhCHZFs2IU", "1k6Cdgh41hc", "lwdfnzrOtlA",
+  "_bljOsv8hEg", "usdBFoXOV-Y", "NaGjxe1VNw0", "MPTtsYxvjPc",
+  "IzpyRjzd-Xc", "zGaIvBFKSxI", "LpM8Aj1pAeg", "pEhuZyfb9ZY",
+  "XX8ap6KzVL0", "CoHqDRTkwMw", "DWHWmZJjfBE", "JXTlThbvqsY",
+  "fsnAlOBgRzM", "9ZMsNKEo5Lc", "h-471eeALcE", "ne-tZFA0gqs",
+  "WOQk6Ea3aZ8", "3lJe6nJohZA", "cMQXnDGWLkI", "rLjlVPgXpMc",
+  "X1RoSsl2SvI", "1_kKPxLp6l4", "zzpugWqlx78", "l8RPngcZ044",
+  "Brd9ugLdJQ4", "ABFOSaDw5c0", "DDhNnJNK5Ic", "S8o5kI142so",
+  "yi3kKp3zsfk", "L2Re1NvY1i8", "9qm6BTphXJY", "fTRwmLsESmg",
+  "DpPvWz4RMLU", "JEnjeapOnNk", "RqE6lRR4v40", "21qRrh316fw",
+  "pMV95T1nFLg", "VgP3eZ-9M9E", "ZBdoxNg1pRE", "9XIu1jNTfZY",
+  "YUAW6TXN6lg", "iPVU864hwUM",
+].map((id, i) => ({ id: i, youtube_id: id, title: "", sort_order: i }));
 
 const FALLBACK_PROJECTS = [
   {
@@ -148,7 +204,7 @@ const FALLBACK_PROJECTS = [
 
 const SectionHeader = ({ title }: { title: string }) => (
   <div className="py-16 text-center">
-    <h2 className="text-brand-orange text-[21px] md:text-[38px] font-light tracking-[10px] uppercase" style={{ wordSpacing: '8px' }}>
+    <h2 className="text-brand-orange text-[21px] md:text-[38px] font-light tracking-[-2px] uppercase" style={{ wordSpacing: '8px' }}>
       {title}
     </h2>
   </div>
@@ -165,46 +221,181 @@ const VideoSkeleton = () => (
   </div>
 );
 
-const VideoEmbed = ({ videoId }: { videoId: string }) => {
-  const [isInView, setIsInView] = useState(false);
+const VideoEmbed = ({
+  videoId,
+  canLoad,
+  onReady,
+}: {
+  videoId: string;
+  canLoad: boolean;
+  onReady: () => void;
+}) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const registry = useContext(PlayerRegistryContext);
+  const uniqueId = useRef(`yt-player-${videoId}-${Math.random().toString(36).slice(2, 8)}`);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = wrapperRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsInView(true);
-          observer.disconnect();
-        }
+        const vis = entry.isIntersecting;
+        setIsVisible(vis);
+        if (vis) setDismissed(false);
       },
-      { rootMargin: "300px" },
+      { threshold: 0.3 }
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!canLoad || playerRef.current) return;
+
+    loadYouTubeAPI().then(() => {
+      if (!containerRef.current || playerRef.current) return;
+
+      const div = document.createElement("div");
+      div.id = uniqueId.current;
+      containerRef.current.appendChild(div);
+
+      playerRef.current = new window.YT.Player(uniqueId.current, {
+        videoId,
+        width: "100%",
+        height: "100%",
+        playerVars: {
+          rel: 0,
+          modestbranding: 1,
+        },
+        events: {
+          onReady: () => {
+            setIsLoaded(true);
+            registry.register(uniqueId.current, playerRef.current);
+            onReady();
+          },
+          onStateChange: (event: any) => {
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              setIsPlaying(true);
+              registry.pauseAllExcept(uniqueId.current);
+            } else if (
+              event.data === window.YT.PlayerState.PAUSED ||
+              event.data === window.YT.PlayerState.ENDED
+            ) {
+              setIsPlaying(false);
+            }
+          },
+        },
+      });
+    });
+
+    return () => {
+      registry.unregister(uniqueId.current);
+      if (playerRef.current?.destroy) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, [canLoad, videoId, registry, onReady]);
+
+  const showMiniPlayer = isPlaying && !isVisible && isLoaded && !dismissed;
+
+  const handleMiniPlayerClick = useCallback(() => {
+    setDismissed(true);
+    wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  const handleDismiss = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDismissed(true);
+    try { playerRef.current?.pauseVideo(); } catch {}
+  }, []);
+
   return (
-    <div className="max-w-5xl mx-auto px-4 mb-12">
-      <div
-        ref={containerRef}
-        className="relative aspect-video w-full overflow-hidden rounded-sm shadow-2xl bg-black"
-      >
-        {!isLoaded && <VideoSkeleton />}
-        {isInView && (
-          <iframe
-            src={`https://www.youtube.com/embed/${videoId}`}
-            title="YouTube video player"
-            className={`absolute top-0 left-0 w-full h-full transition-opacity duration-700 ${isLoaded ? "opacity-100" : "opacity-0"}`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            onLoad={() => setIsLoaded(true)}
+    <>
+      <div className="max-w-5xl mx-auto px-4 mb-12">
+        <div
+          ref={wrapperRef}
+          className="relative aspect-video w-full overflow-hidden rounded-sm shadow-2xl bg-black"
+        >
+          {!isLoaded && <VideoSkeleton />}
+          {showMiniPlayer && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-[72px] h-[50px] bg-white/[0.06] rounded-2xl flex items-center justify-center">
+                <div className="w-0 h-0 border-l-[16px] border-l-white/15 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1" />
+              </div>
+            </div>
+          )}
+          <div
+            ref={containerRef}
+            className={
+              showMiniPlayer
+                ? "fixed bottom-5 right-5 w-[280px] sm:w-[320px] aspect-video z-[9999] rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 animate-mini-in"
+                : `absolute top-0 left-0 w-full h-full transition-opacity duration-700 ${isLoaded ? "opacity-100" : "opacity-0"}`
+            }
           />
-        )}
+        </div>
       </div>
-    </div>
+      {showMiniPlayer && (
+        <div className="fixed bottom-5 right-5 w-[280px] sm:w-[320px] aspect-video z-[10000] rounded-lg overflow-hidden animate-mini-in">
+          <div
+            onClick={handleMiniPlayerClick}
+            className="absolute inset-0 cursor-pointer"
+          />
+          <button
+            onClick={handleDismiss}
+            className="absolute top-2 right-2 z-10 bg-black/60 hover:bg-black/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-[10px] font-bold transition-colors backdrop-blur-sm"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </>
+  );
+};
+
+const VideoSection = ({ videos }: { videos: { id: number; youtube_id: string }[] }) => {
+  const [readyCount, setReadyCount] = useState(0);
+  const advance = useCallback(() => setReadyCount((c) => c + 1), []);
+  const playersRef = useRef<Map<string, any>>(new Map());
+
+  const registry: PlayerRegistry = useRef<PlayerRegistry>({
+    register: (id, player) => {
+      playersRef.current.set(id, player);
+    },
+    unregister: (id) => {
+      playersRef.current.delete(id);
+    },
+    pauseAllExcept: (id) => {
+      playersRef.current.forEach((player, key) => {
+        if (key !== id) {
+          try {
+            player.pauseVideo();
+          } catch {}
+        }
+      });
+    },
+  }).current;
+
+  return (
+    <PlayerRegistryContext.Provider value={registry}>
+      <section id="work">
+        <SectionHeader title="Featured Work" />
+        {videos.map((v, i) => (
+          <VideoEmbed
+            key={v.id}
+            videoId={v.youtube_id}
+            canLoad={i <= readyCount}
+            onReady={advance}
+          />
+        ))}
+      </section>
+    </PlayerRegistryContext.Provider>
   );
 };
 
@@ -217,21 +408,33 @@ const StillsCarousel = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scroll = (direction: "left" | "right") => {
+  const scroll = useCallback((direction: "left" | "right") => {
     const container = scrollRef.current;
     if (!container) return;
     const firstChild = container.firstElementChild as HTMLElement | null;
     if (!firstChild) return;
     const itemWidth = firstChild.offsetWidth + 4;
-    container.scrollBy({
-      left: direction === "left" ? -itemWidth : itemWidth,
-      behavior: "smooth",
-    });
-  };
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    if (direction === "right" && container.scrollLeft >= maxScroll - 2) {
+      container.scrollTo({ left: 0, behavior: "smooth" });
+    } else {
+      container.scrollBy({
+        left: direction === "left" ? -itemWidth : itemWidth,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => scroll("right"), 5000);
+    return () => clearInterval(id);
+  }, [scroll]);
 
   return (
-    <div className="mb-20">
-      <p className="text-center text-white font-light text-[22px] md:text-[24px] mb-8">{title}</p>
+    <div className="pb-10">
+      <div className="h-[40px] flex items-center justify-center mb-4">
+        <p className="text-center text-white font-light text-[22px] md:text-[24px] leading-tight">{title}</p>
+      </div>
       <div className="relative group">
         <div ref={scrollRef} className="flex overflow-x-auto scrollbar-hide gap-1 px-4 md:px-0">
           {images.map((img, i) => (
@@ -286,11 +489,14 @@ export default function App() {
         if (!data.projects || data.projects.length === 0) {
           data.projects = FALLBACK_PROJECTS;
         }
+        if (!data.videos || data.videos.length === 0) {
+          data.videos = FALLBACK_VIDEOS;
+        }
         setContent(data);
       })
       .catch(() => {
         setContent({
-          videos: [],
+          videos: FALLBACK_VIDEOS,
           projects: FALLBACK_PROJECTS,
           settings: DEFAULT_SETTINGS as any,
         });
@@ -345,12 +551,7 @@ export default function App() {
       <div className="relative z-10 bg-black">
         {/* Featured Work */}
         {content.videos.length > 0 && (
-          <section id="work">
-            <SectionHeader title="Featured Work" />
-            {content.videos.map((v: any) => (
-              <VideoEmbed key={v.id} videoId={v.youtube_id} />
-            ))}
-          </section>
+          <VideoSection videos={content.videos} />
         )}
 
         {/* Stills & Projects */}

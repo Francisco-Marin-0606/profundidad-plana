@@ -37,6 +37,12 @@ body {
   scrollbar-width: none;
 }
 
+.aspect-video iframe,
+.animate-mini-in iframe {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 @keyframes slide-up {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -51,4 +57,18 @@ body {
 }
 .animate-shimmer {
   animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes mini-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-mini-in {
+  animation: mini-in 0.3s ease-out;
 }

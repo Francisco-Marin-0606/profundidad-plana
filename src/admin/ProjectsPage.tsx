@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Plus,
   Trash2,
@@ -31,6 +31,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
 import type { Project, ProjectImage } from "../types";
+import PublishBar from "./PublishBar";
 
 function NewProjectModal({
   project,
@@ -42,19 +43,13 @@ function NewProjectModal({
   onSave: (title: string) => void;
 }) {
   const [title, setTitle] = useState(project?.title || "");
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    onSave(title.trim());
-  };
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!title.trim()) return; onSave(title.trim()); };
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#14141c] border border-white/10 rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h3 className="text-lg font-medium">{project ? "Editar Proyecto" : "Nuevo Proyecto"}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
@@ -147,7 +142,6 @@ function AddImageInput({ onAdd }: { onAdd: (url: string) => void }) {
 function SortableImageItem({ img, onDelete }: { img: ProjectImage; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : undefined, opacity: isDragging ? 0.7 : 1 };
-
   return (
     <div ref={setNodeRef} style={style} className={`relative group aspect-video rounded-lg overflow-hidden bg-white/5 ${isDragging ? "ring-2 ring-brand-orange/50" : ""}`}>
       <div {...attributes} {...listeners} className="absolute top-2 left-2 p-1 rounded bg-black/60 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10 touch-none">
@@ -164,8 +158,6 @@ function SortableImageItem({ img, onDelete }: { img: ProjectImage; onDelete: () 
 function SortableProjectItem({
   project,
   isOpen,
-  index,
-  totalProjects,
   onToggle,
   onEdit,
   onDelete,
@@ -175,8 +167,6 @@ function SortableProjectItem({
 }: {
   project: Project;
   isOpen: boolean;
-  index: number;
-  totalProjects: number;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -186,7 +176,6 @@ function SortableProjectItem({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : undefined, opacity: isDragging ? 0.8 : 1 };
-
   const imageSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const handleImageDragEnd = (event: DragEndEvent) => {
@@ -216,7 +205,6 @@ function SortableProjectItem({
         </div>
         {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
       </div>
-
       {isOpen && (
         <div className="px-5 pb-5 border-t border-white/5">
           {project.images && project.images.length > 0 && (
@@ -237,11 +225,19 @@ function SortableProjectItem({
   );
 }
 
+function serializeOrder(projects: Project[]): string {
+  return projects
+    .map((p) => `${p.id}:${(p.images || []).map((i) => i.id).join(",")}`)
+    .join("|");
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState<Project | "new" | null>(null);
+  const [orderChanged, setOrderChanged] = useState(false);
+  const savedOrderRef = useRef("");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -249,10 +245,16 @@ export default function ProjectsPage() {
     try {
       const data = await api.get<Project[]>("/api/admin/projects");
       setProjects(data);
+      savedOrderRef.current = serializeOrder(data);
+      setOrderChanged(false);
     } catch {} finally { setLoading(false); }
   };
 
   useEffect(() => { loadProjects(); }, []);
+
+  const checkOrderChanged = useCallback((ps: Project[]) => {
+    setOrderChanged(serializeOrder(ps) !== savedOrderRef.current);
+  }, []);
 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -285,19 +287,33 @@ export default function ProjectsPage() {
     await loadProjects();
   };
 
-  const handleProjectDragEnd = async (event: DragEndEvent) => {
+  const handleProjectDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = projects.findIndex((p) => p.id === active.id);
     const newIndex = projects.findIndex((p) => p.id === over.id);
     const reordered = arrayMove(projects, oldIndex, newIndex);
     setProjects(reordered);
-    await Promise.all(reordered.map((p, i) => api.put("/api/admin/projects", { id: p.id, sort_order: i })));
+    checkOrderChanged(reordered);
   };
 
-  const handleImageReorder = async (projectId: number, images: ProjectImage[]) => {
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, images } : p)));
-    await Promise.all(images.map((img, i) => api.put("/api/admin/project-images", { id: img.id, sort_order: i })));
+  const handleImageReorder = (projectId: number, images: ProjectImage[]) => {
+    const updated = projects.map((p) => (p.id === projectId ? { ...p, images } : p));
+    setProjects(updated);
+    checkOrderChanged(updated);
+  };
+
+  const handlePublish = async () => {
+    const calls: Promise<any>[] = [];
+    projects.forEach((p, pi) => {
+      calls.push(api.put("/api/admin/projects", { id: p.id, sort_order: pi }));
+      p.images?.forEach((img, ii) => {
+        calls.push(api.put("/api/admin/project-images", { id: img.id, sort_order: ii }));
+      });
+    });
+    await Promise.all(calls);
+    savedOrderRef.current = serializeOrder(projects);
+    setOrderChanged(false);
   };
 
   const totalImages = projects.reduce((s, p) => s + (p.images?.length || 0), 0);
@@ -307,7 +323,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div>
+    <div className="pb-24">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold">Proyectos</h2>
         <button onClick={() => setModal("new")} className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
@@ -329,13 +345,11 @@ export default function ProjectsPage() {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
         <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
-            {projects.map((project, index) => (
+            {projects.map((project) => (
               <SortableProjectItem
                 key={project.id}
                 project={project}
                 isOpen={expanded.has(project.id)}
-                index={index}
-                totalProjects={projects.length}
                 onToggle={() => toggleExpand(project.id)}
                 onEdit={() => setModal(project)}
                 onDelete={() => handleDeleteProject(project.id)}
@@ -352,6 +366,8 @@ export default function ProjectsPage() {
       {modal !== null && (
         <NewProjectModal project={modal === "new" ? undefined : modal} onClose={() => setModal(null)} onSave={handleCreateOrEdit} />
       )}
+
+      <PublishBar visible={orderChanged} onPublish={handlePublish} />
     </div>
   );
 }

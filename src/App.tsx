@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
-  MapPin,
-  Phone,
-  Mail,
   ExternalLink,
   Instagram,
   ChevronLeft,
@@ -152,7 +149,7 @@ const FALLBACK_PROJECTS = [
 
 const SectionHeader = ({ title }: { title: string }) => (
   <div className="py-16 text-center">
-    <h2 className="text-brand-orange text-2xl md:text-4xl font-light tracking-[0.15em] uppercase">
+    <h2 className="text-brand-orange text-[21px] md:text-[38px] font-light tracking-[10px] uppercase" style={{ wordSpacing: '8px' }}>
       {title}
     </h2>
   </div>
@@ -195,7 +192,7 @@ const StillsCarousel = ({
 
   return (
     <div className="mb-20">
-      <p className="text-center text-gray-300 font-light text-lg mb-8">{title}</p>
+      <p className="text-center text-white font-light text-[22px] md:text-[24px] mb-8">{title}</p>
       <div className="relative group">
         <div ref={scrollRef} className="flex overflow-x-auto scrollbar-hide gap-1 px-4 md:px-0">
           {images.map((img, i) => (
@@ -267,41 +264,41 @@ export default function App() {
   const s = { ...DEFAULT_SETTINGS, ...content.settings };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-black text-white selection:bg-brand-orange/30 font-sans">
       {/* Fixed Hero Background */}
       <div className="fixed inset-0 z-0">
         <img
           src={s.hero_image}
           alt="Cinematic Background"
-          className="w-full h-full object-cover opacity-60"
+          className="w-full h-full object-cover object-top"
           referrerPolicy="no-referrer"
         />
-        <div className="absolute inset-0 cinematic-overlay" />
+        <div className="absolute inset-0 hero-bg-overlay" />
       </div>
 
       {/* Hero Section */}
-      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-center pt-32 md:pt-40">
+      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-center px-6 md:px-10 pt-20 md:pt-0">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="text-center px-4 hero-text-shadow"
+          className="text-center"
         >
-          <h1 className="text-5xl md:text-8xl font-extralight tracking-tight mb-6">
+          <h1 className="text-[32px] md:text-[111px] font-extralight leading-tight mb-4 md:mb-6 hero-title-shadow">
             Profundidad Plana
           </h1>
-          <p className="text-lg md:text-xl font-light tracking-widest mb-4">
+          <h2 className="text-[18px] md:text-[24px] font-normal mb-2 md:mb-4 hero-subtitle-shadow">
             Film Director | Cinematographer
-          </p>
-          <p className="text-lg md:text-xl font-light tracking-widest mb-8">
+          </h2>
+          <h2 className="text-[18px] md:text-[24px] font-normal mb-6 md:mb-8">
             Worldwide
-          </p>
-          <div className="flex justify-center gap-4 text-2xl">
+          </h2>
+          <h3 className="text-[24px] md:text-[32px] font-normal flex justify-center gap-4">
             <span>🇦🇷</span>
             <span>🇲🇽</span>
             <span>🇪🇸</span>
             <span>🇺🇸</span>
-          </div>
+          </h3>
         </motion.div>
       </section>
 
@@ -328,10 +325,13 @@ export default function App() {
         )}
 
         {/* Vision Section */}
-        <section id="vision" className="max-w-6xl mx-auto px-6 py-20">
+        <section id="vision" className="px-5 md:px-[120px] py-20">
           <SectionHeader title="Vision" />
-          <div className="grid md:grid-cols-2 gap-12 text-sm md:text-base font-light leading-relaxed text-gray-300">
-            <p>{s.vision_es}</p>
+          <div
+            className="text-[18px] font-light text-white text-justify md:columns-2 md:gap-12"
+            style={{ lineHeight: '41px', letterSpacing: '-1px', wordSpacing: '3px' }}
+          >
+            <p className="mb-6 md:mb-0">{s.vision_es}</p>
             <p>{s.vision_en}</p>
           </div>
         </section>
@@ -339,37 +339,35 @@ export default function App() {
         {/* Get In Touch */}
         <section id="contact" className="py-20 bg-black">
           <SectionHeader title="Get In Touch" />
-          <div className="text-center px-6">
-            <p className="text-lg md:text-xl font-light mb-12">
+          <div className="text-center px-5 md:px-6">
+            <h1 className="text-[18px] md:text-[21px] font-light mb-12 text-white">
               {s.contact_tagline}
-            </p>
+            </h1>
 
-            <div className="space-y-6 max-w-md mx-auto">
-              <div className="flex items-center justify-center gap-3 text-lg font-light">
-                <MapPin className="text-brand-orange w-5 h-5" />
-                <span>{s.location}</span>
-              </div>
-              <div className="flex items-center justify-center gap-3 text-lg font-light">
-                <Phone className="text-brand-orange w-5 h-5" />
-                <span>{s.phone}</span>
-              </div>
-              <div className="flex items-center justify-center gap-3 text-lg font-light">
-                <Mail className="text-brand-orange w-5 h-5" />
-                <a
-                  href={`mailto:${s.email}`}
-                  className="hover:text-brand-orange transition-colors"
-                >
-                  {s.email}
-                </a>
-              </div>
+            <div className="space-y-4 max-w-md mx-auto">
+              <h1 className="text-[18px] md:text-[24px] font-light text-white">
+                📍 {s.location}
+              </h1>
+              <h1 className="text-[18px] md:text-[24px] font-light text-white">
+                📞 {s.phone}
+              </h1>
             </div>
 
-            <div className="mt-20">
+            <div className="mt-6">
+              <a
+                href={`mailto:${s.email}`}
+                className="text-[18px] md:text-[24px] font-light text-white hover:opacity-80 transition-opacity lowercase"
+              >
+                {s.email}
+              </a>
+            </div>
+
+            <div className="mt-12">
               <a
                 href={s.instagram_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm tracking-widest uppercase hover:text-brand-orange transition-colors"
+                className="inline-flex items-center gap-6 text-[18px] md:text-[17px] font-normal tracking-[3.8px] text-white hover:opacity-80 transition-opacity"
               >
                 Visit my Instagram for much more content
                 <ExternalLink className="w-4 h-4" />
@@ -379,12 +377,12 @@ export default function App() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-white py-12 flex justify-center">
+        <footer className="bg-black border-t border-white/10 py-12 flex justify-center">
           <a
             href={s.instagram_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-black hover:scale-110 transition-transform"
+            className="text-white hover:scale-110 transition-transform"
           >
             <Instagram className="w-8 h-8" />
           </a>

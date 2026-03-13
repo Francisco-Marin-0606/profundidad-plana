@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, Settings, Check, Upload, Loader2 } from "lucide-react";
+import { Rocket, Settings, Check, Upload, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { SiteSettings } from "../types";
 
@@ -230,7 +230,7 @@ export default function SettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className={`flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all ${
+          className={`flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all ${
             saved
               ? "bg-green-500/20 text-green-400 border border-green-500/30"
               : "bg-brand-orange hover:bg-brand-orange/90 text-white"
@@ -239,12 +239,17 @@ export default function SettingsPage() {
           {saved ? (
             <>
               <Check className="w-4 h-4" />
-              Guardado
+              Publicado
+            </>
+          ) : saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Publicando...
             </>
           ) : (
             <>
-              <Save className="w-4 h-4" />
-              {saving ? "Guardando..." : "Guardar cambios"}
+              <Rocket className="w-4 h-4" />
+              Pasar a produccion
             </>
           )}
         </button>

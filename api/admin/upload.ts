@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import db from "../lib/db.js";
 import { requireAuth } from "../lib/auth.js";
 
+export const config = {
+  api: { bodyParser: { sizeLimit: "10mb" } },
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");

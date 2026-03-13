@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, Settings, Check } from "lucide-react";
+import { Save, Settings, Check, Upload, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { SiteSettings } from "../types";
 
@@ -69,6 +69,95 @@ function Field({
           className={inputClasses}
           placeholder={placeholder}
         />
+      )}
+    </div>
+  );
+}
+
+function ImageField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setUploading(true);
+    try {
+      const token = localStorage.getItem("pp_admin_token");
+      const res = await fetch(
+        `/api/admin/upload?filename=${encodeURIComponent(file.name)}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: file,
+        }
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      onChange(data.url);
+    } catch {
+      alert("Error al subir la imagen");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
+        {label}
+      </label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-brand-orange/50 transition-colors"
+          placeholder={placeholder}
+        />
+        <label
+          className={`flex items-center gap-1.5 px-4 py-3 rounded-lg text-sm font-medium cursor-pointer transition-all flex-shrink-0 ${
+            uploading
+              ? "bg-white/5 text-gray-500"
+              : "bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          {uploading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          {uploading ? "Subiendo..." : "Subir"}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+            className="hidden"
+            disabled={uploading}
+          />
+        </label>
+      </div>
+      {value && (
+        <div className="mt-2 aspect-video max-w-xs rounded-lg overflow-hidden bg-white/5">
+          <img
+            src={value}
+            alt="Preview"
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        </div>
       )}
     </div>
   );
@@ -162,11 +251,11 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         <SettingsSection title="Hero">
-          <Field
-            label="URL de imagen de fondo"
+          <ImageField
+            label="Imagen de fondo"
             value={settings.hero_image}
             onChange={(v) => update("hero_image", v)}
-            placeholder="https://images.unsplash.com/..."
+            placeholder="https://images.unsplash.com/... o subi un archivo"
           />
         </SettingsSection>
 

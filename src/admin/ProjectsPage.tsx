@@ -10,6 +10,9 @@ import {
   ArrowUp,
   ArrowDown,
   Pencil,
+  Upload,
+  Link,
+  Loader2,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Project } from "../types";
@@ -83,33 +86,148 @@ function AddImageInput({
 }: {
   onAdd: (url: string) => void;
 }) {
+  const [mode, setMode] = useState<"url" | "file">("url");
   const [url, setUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     onAdd(url.trim());
     setUrl("");
   };
 
+  const uploadFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Solo se permiten archivos de imagen");
+      return;
+    }
+    setUploading(true);
+    try {
+      const token = localStorage.getItem("pp_admin_token");
+      const res = await fetch(
+        `/api/admin/upload?filename=${encodeURIComponent(file.name)}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: file,
+        }
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      onAdd(data.url);
+    } catch {
+      alert("Error al subir la imagen");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFile(file);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 mt-3">
-      <input
-        type="text"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-orange/50 transition-colors"
-        placeholder="Pegar URL de imagen..."
-      />
-      <button
-        type="submit"
-        disabled={!url.trim()}
-        className="px-4 py-2.5 rounded-lg text-sm bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-40 text-white font-medium transition-all flex items-center gap-1.5"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        Agregar
-      </button>
-    </form>
+    <div className="mt-4 space-y-3">
+      {/* Toggle URL / Archivo */}
+      <div className="flex gap-1 bg-white/5 rounded-lg p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setMode("url")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === "url"
+              ? "bg-brand-orange/20 text-brand-orange"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Link className="w-3 h-3" />
+          URL
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("file")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === "file"
+              ? "bg-brand-orange/20 text-brand-orange"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Upload className="w-3 h-3" />
+          Archivo
+        </button>
+      </div>
+
+      {mode === "url" ? (
+        <form onSubmit={handleUrlSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-orange/50 transition-colors"
+            placeholder="Pegar URL de imagen..."
+          />
+          <button
+            type="submit"
+            disabled={!url.trim()}
+            className="px-4 py-2.5 rounded-lg text-sm bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-40 text-white font-medium transition-all flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Agregar
+          </button>
+        </form>
+      ) : (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+            dragOver
+              ? "border-brand-orange bg-brand-orange/5"
+              : "border-white/10 hover:border-white/20"
+          } ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+        >
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 text-brand-orange animate-spin" />
+              <p className="text-sm text-gray-400">Subiendo imagen...</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-6 h-6 text-gray-500 mx-auto mb-2" />
+              <p className="text-sm text-gray-400 mb-1">
+                Arrastra una imagen aqui o
+              </p>
+              <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm bg-brand-orange hover:bg-brand-orange/90 text-white font-medium cursor-pointer transition-all">
+                <Plus className="w-3.5 h-3.5" />
+                Elegir archivo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </label>
+              <p className="text-xs text-gray-600 mt-2">
+                JPG, PNG, WebP -- max 10MB
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

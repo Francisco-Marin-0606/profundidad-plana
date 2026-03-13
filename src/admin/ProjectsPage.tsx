@@ -98,25 +98,45 @@ function AddImageInput({
     setUrl("");
   };
 
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const uploadFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       alert("Solo se permiten archivos de imagen");
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("La imagen no puede superar 10MB");
+      return;
+    }
     setUploading(true);
     try {
+      const base64 = await fileToBase64(file);
       const token = localStorage.getItem("pp_admin_token");
-      const res = await fetch(
-        `/api/admin/upload?filename=${encodeURIComponent(file.name)}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: file,
-        }
-      );
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type,
+          data: base64,
+        }),
+      });
       if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      onAdd(data.url);
+      const result = await res.json();
+      onAdd(result.url);
     } catch {
       alert("Error al subir la imagen");
     } finally {

@@ -89,20 +89,34 @@ function ImageField({
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/")) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("La imagen no puede superar 10MB");
+      return;
+    }
     setUploading(true);
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
       const token = localStorage.getItem("pp_admin_token");
-      const res = await fetch(
-        `/api/admin/upload?filename=${encodeURIComponent(file.name)}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: file,
-        }
-      );
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type,
+          data: base64,
+        }),
+      });
       if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      onChange(data.url);
+      const result = await res.json();
+      onChange(result.url);
     } catch {
       alert("Error al subir la imagen");
     } finally {

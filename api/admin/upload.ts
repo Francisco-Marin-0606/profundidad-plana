@@ -1,15 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { put } from "@vercel/blob";
+import db from "../lib/db.js";
 import { requireAuth } from "../lib/auth.js";
-
-function collectBody(req: VercelRequest): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -19,30 +10,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!(await requireAuth(req, res))) return;
 
-  const filename = req.query.filename as string;
-  if (!filename) {
-    return res.status(400).json({ error: "filename query param es requerido" });
-  }
-
   try {
-    const body = await collectBody(req);
+    const { filename, content_type, data } = req.body;
 
-    if (!body.length) {
-      return res.status(400).json({ error: "No se recibio ningun archivo" });
+    if (!data || !filename) {
+      return res.status(400).json({ error: "filename y data son requeridos" });
     }
 
-    const blob = await put(
-      `profundidad-plana/${Date.now()}-${filename}`,
-      body,
-      { access: "public" }
-    );
+    const result = await db.execute({
+      sql: "INSERT INTO images (filename, content_type, data) VALUES (?, ?, ?)",
+      args: [filename, content_type || "image/jpeg", data],
+    });
 
-    return res.json({ url: blob.url });
+    const id = Number(result.lastInsertRowid);
+    const url = `/api/images/${id}`;
+
+    return res.json({ url });
   } catch (error: any) {
     console.error("Upload error:", error?.message || error);
-    return res.status(500).json({
-      error: "Error al subir el archivo",
-      detail: error?.message,
-    });
+    return res.status(500).json({ error: "Error al subir el archivo" });
   }
 }

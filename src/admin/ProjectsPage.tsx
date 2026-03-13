@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -30,8 +30,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
+import { usePublish } from "../lib/publish";
 import type { Project, ProjectImage } from "../types";
-import PublishBar from "./PublishBar";
 
 function NewProjectModal({
   project,
@@ -225,19 +225,12 @@ function SortableProjectItem({
   );
 }
 
-function serializeOrder(projects: Project[]): string {
-  return projects
-    .map((p) => `${p.id}:${(p.images || []).map((i) => i.id).join(",")}`)
-    .join("|");
-}
-
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState<Project | "new" | null>(null);
-  const [orderChanged, setOrderChanged] = useState(false);
-  const savedOrderRef = useRef("");
+  const { markDirty } = usePublish();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -245,16 +238,10 @@ export default function ProjectsPage() {
     try {
       const data = await api.get<Project[]>("/api/admin/projects");
       setProjects(data);
-      savedOrderRef.current = serializeOrder(data);
-      setOrderChanged(false);
     } catch {} finally { setLoading(false); }
   };
 
   useEffect(() => { loadProjects(); }, []);
-
-  const checkOrderChanged = useCallback((ps: Project[]) => {
-    setOrderChanged(serializeOrder(ps) !== savedOrderRef.current);
-  }, []);
 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -268,52 +255,44 @@ export default function ProjectsPage() {
       await api.put("/api/admin/projects", { id: modal.id, title });
     }
     setModal(null);
+    markDirty();
     await loadProjects();
   };
 
   const handleDeleteProject = async (id: number) => {
     if (!confirm("Eliminar este proyecto y todas sus imagenes?")) return;
     await api.delete("/api/admin/projects", id);
+    markDirty();
     await loadProjects();
   };
 
   const handleAddImage = async (projectId: number, url: string) => {
     await api.post("/api/admin/project-images", { project_id: projectId, image_url: url });
+    markDirty();
     await loadProjects();
   };
 
   const handleDeleteImage = async (imageId: number) => {
     await api.delete("/api/admin/project-images", imageId);
+    markDirty();
     await loadProjects();
   };
 
-  const handleProjectDragEnd = (event: DragEndEvent) => {
+  const handleProjectDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = projects.findIndex((p) => p.id === active.id);
     const newIndex = projects.findIndex((p) => p.id === over.id);
     const reordered = arrayMove(projects, oldIndex, newIndex);
     setProjects(reordered);
-    checkOrderChanged(reordered);
+    markDirty();
+    await Promise.all(reordered.map((p, i) => api.put("/api/admin/projects", { id: p.id, sort_order: i })));
   };
 
-  const handleImageReorder = (projectId: number, images: ProjectImage[]) => {
-    const updated = projects.map((p) => (p.id === projectId ? { ...p, images } : p));
-    setProjects(updated);
-    checkOrderChanged(updated);
-  };
-
-  const handlePublish = async () => {
-    const calls: Promise<any>[] = [];
-    projects.forEach((p, pi) => {
-      calls.push(api.put("/api/admin/projects", { id: p.id, sort_order: pi }));
-      p.images?.forEach((img, ii) => {
-        calls.push(api.put("/api/admin/project-images", { id: img.id, sort_order: ii }));
-      });
-    });
-    await Promise.all(calls);
-    savedOrderRef.current = serializeOrder(projects);
-    setOrderChanged(false);
+  const handleImageReorder = async (projectId: number, images: ProjectImage[]) => {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, images } : p)));
+    markDirty();
+    await Promise.all(images.map((img, i) => api.put("/api/admin/project-images", { id: img.id, sort_order: i })));
   };
 
   const totalImages = projects.reduce((s, p) => s + (p.images?.length || 0), 0);
@@ -323,7 +302,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="pb-24">
+    <div>
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold">Proyectos</h2>
         <button onClick={() => setModal("new")} className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
@@ -363,11 +342,7 @@ export default function ProjectsPage() {
         </SortableContext>
       </DndContext>
 
-      {modal !== null && (
-        <NewProjectModal project={modal === "new" ? undefined : modal} onClose={() => setModal(null)} onSave={handleCreateOrEdit} />
-      )}
-
-      <PublishBar visible={orderChanged} onPublish={handlePublish} />
+      {modal !== null && (<NewProjectModal project={modal === "new" ? undefined : modal} onClose={() => setModal(null)} onSave={handleCreateOrEdit} />)}
     </div>
   );
 }

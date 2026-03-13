@@ -1,30 +1,22 @@
 import { Rocket, Loader2, Check } from "lucide-react";
 import { useState } from "react";
+import { usePublish } from "../lib/publish";
 
-export default function PublishBar({
-  visible,
-  onPublish,
-}: {
-  visible: boolean;
-  onPublish: () => Promise<void>;
-}) {
-  const [publishing, setPublishing] = useState(false);
+export default function PublishBar() {
+  const { isDirty, publish, publishing } = usePublish();
   const [done, setDone] = useState(false);
 
   const handle = async () => {
-    setPublishing(true);
     try {
-      await onPublish();
+      await publish();
       setDone(true);
-      setTimeout(() => setDone(false), 2000);
+      setTimeout(() => setDone(false), 2500);
     } catch {
       alert("Error al publicar los cambios");
-    } finally {
-      setPublishing(false);
     }
   };
 
-  if (!visible && !done) return null;
+  if (!isDirty && !done) return null;
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-slide-up">
@@ -34,26 +26,18 @@ export default function PublishBar({
             <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
               <Check className="w-4 h-4 text-green-400" />
             </div>
-            <span className="text-sm text-green-400 font-medium">
-              Cambios publicados
-            </span>
+            <span className="text-sm text-green-400 font-medium">Cambios publicados</span>
           </>
         ) : (
           <>
             <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-sm text-gray-300">
-              Tienes cambios sin publicar
-            </span>
+            <span className="text-sm text-gray-300">Tienes cambios sin publicar</span>
             <button
               onClick={handle}
               disabled={publishing}
               className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-70 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
             >
-              {publishing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Rocket className="w-4 h-4" />
-              )}
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
               {publishing ? "Publicando..." : "Pasar a producción"}
             </button>
           </>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
   Search,
@@ -24,8 +24,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
+import { usePublish } from "../lib/publish";
 import type { Video } from "../types";
-import PublishBar from "./PublishBar";
 
 function extractYoutubeId(input: string): string {
   const trimmed = input.trim();
@@ -64,9 +64,7 @@ function VideoModal({
       <div className="bg-[#14141c] border border-white/10 rounded-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h3 className="text-lg font-medium">{isEdit ? "Editar Video" : "Nuevo Video"}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
@@ -101,27 +99,12 @@ function SortableVideoItem({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: video.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.8 : 1,
-  };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: video.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : undefined, opacity: isDragging ? 0.8 : 1 };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-4 hover:bg-white/[0.07] transition-colors group ${
-        isDragging ? "shadow-2xl shadow-brand-orange/10 ring-1 ring-brand-orange/30" : ""
-      }`}
-    >
-      <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-gray-600 hover:text-gray-300 transition-colors touch-none">
-        <GripVertical className="w-4 h-4" />
-      </button>
+    <div ref={setNodeRef} style={style} className={`bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-4 hover:bg-white/[0.07] transition-colors group ${isDragging ? "shadow-2xl shadow-brand-orange/10 ring-1 ring-brand-orange/30" : ""}`}>
+      <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-gray-600 hover:text-gray-300 transition-colors touch-none"><GripVertical className="w-4 h-4" /></button>
       <img src={`https://img.youtube.com/vi/${video.youtube_id}/default.jpg`} alt="" className="w-20 h-14 object-cover rounded-lg flex-shrink-0" referrerPolicy="no-referrer" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{video.title || video.youtube_id}</p>
@@ -140,19 +123,14 @@ export default function VideosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Partial<Video> | null | "new">(null);
-  const [orderChanged, setOrderChanged] = useState(false);
-  const savedOrderRef = useRef<number[]>([]);
+  const { markDirty } = usePublish();
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const loadVideos = async () => {
     try {
       const data = await api.get<Video[]>("/api/admin/videos");
       setVideos(data);
-      savedOrderRef.current = data.map((v) => v.id);
-      setOrderChanged(false);
     } catch {} finally { setLoading(false); }
   };
 
@@ -165,54 +143,38 @@ export default function VideosPage() {
       await api.put("/api/admin/videos", { id: modal.id, ...data });
     }
     setModal(null);
+    markDirty();
     await loadVideos();
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Eliminar este video?")) return;
     await api.delete("/api/admin/videos", id);
+    markDirty();
     await loadVideos();
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = videos.findIndex((v) => v.id === active.id);
     const newIndex = videos.findIndex((v) => v.id === over.id);
     const reordered = arrayMove(videos, oldIndex, newIndex);
     setVideos(reordered);
-
-    const currentOrder = reordered.map((v) => v.id);
-    const isSame = currentOrder.every((id, i) => id === savedOrderRef.current[i]);
-    setOrderChanged(!isSame);
-  };
-
-  const handlePublish = async () => {
-    await Promise.all(
-      videos.map((v, i) => api.put("/api/admin/videos", { id: v.id, sort_order: i }))
-    );
-    savedOrderRef.current = videos.map((v) => v.id);
-    setOrderChanged(false);
+    markDirty();
+    await Promise.all(reordered.map((v, i) => api.put("/api/admin/videos", { id: v.id, sort_order: i })));
   };
 
   const filtered = search
-    ? videos.filter(
-        (v) =>
-          v.title.toLowerCase().includes(search.toLowerCase()) ||
-          v.youtube_id.toLowerCase().includes(search.toLowerCase())
-      )
+    ? videos.filter((v) => v.title.toLowerCase().includes(search.toLowerCase()) || v.youtube_id.toLowerCase().includes(search.toLowerCase()))
     : videos;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return (<div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" /></div>);
   }
 
   return (
-    <div className="pb-24">
+    <div>
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold">Videos</h2>
         <button onClick={() => setModal("new")} className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
@@ -221,9 +183,7 @@ export default function VideosPage() {
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6 flex items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-          <Film className="w-5 h-5 text-purple-400" />
-        </div>
+        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center"><Film className="w-5 h-5 text-purple-400" /></div>
         <div>
           <p className="text-xl font-semibold">{videos.length}</p>
           <p className="text-xs text-gray-500 uppercase tracking-wider">Videos totales</p>
@@ -241,18 +201,12 @@ export default function VideosPage() {
             {filtered.map((video) => (
               <SortableVideoItem key={video.id} video={video} onEdit={() => setModal(video)} onDelete={() => handleDelete(video.id)} />
             ))}
-            {filtered.length === 0 && (
-              <div className="text-center py-16 text-gray-500">{search ? "No se encontraron videos" : "No hay videos todavia"}</div>
-            )}
+            {filtered.length === 0 && (<div className="text-center py-16 text-gray-500">{search ? "No se encontraron videos" : "No hay videos todavia"}</div>)}
           </div>
         </SortableContext>
       </DndContext>
 
-      {modal !== null && (
-        <VideoModal video={modal === "new" ? {} : modal} onClose={() => setModal(null)} onSave={handleSave} />
-      )}
-
-      <PublishBar visible={orderChanged} onPublish={handlePublish} />
+      {modal !== null && (<VideoModal video={modal === "new" ? {} : modal} onClose={() => setModal(null)} onSave={handleSave} />)}
     </div>
   );
 }

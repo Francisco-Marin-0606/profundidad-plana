@@ -81,7 +81,7 @@ const SETTINGS = {
   location: "Buenos Aires, Argentina.",
   phone: "+5491169464252",
   email: "info@profundidadplana.com",
-  instagram_url: "https://instagram.com",
+  instagram_url: "https://www.instagram.com/profundidad.plana/",
   vision_es:
     "Profundidad Plana surge de las imágenes que vemos en pantallas, fotografías u otros medios visuales son superficies planas bidimensionales que representan objetos o escenas tridimensionales utilizando técnicas visuales para crear la ilusión de profundidad. Aunque las imágenes pueden parecer tridimensionales, en realidad son representaciones planas de la realidad.",
   vision_en:

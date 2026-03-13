@@ -154,19 +154,59 @@ const SectionHeader = ({ title }: { title: string }) => (
   </div>
 );
 
-const VideoEmbed = ({ videoId }: { videoId: string }) => (
-  <div className="max-w-5xl mx-auto px-4 mb-12">
-    <div className="relative aspect-video w-full overflow-hidden rounded-sm shadow-2xl">
-      <iframe
-        src={`https://www.youtube.com/embed/${videoId}`}
-        title="YouTube video player"
-        className="absolute top-0 left-0 w-full h-full"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      ></iframe>
+const VideoSkeleton = () => (
+  <div className="absolute inset-0 bg-[#0f0f0f] overflow-hidden">
+    <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="w-[72px] h-[50px] bg-white/[0.08] rounded-2xl flex items-center justify-center backdrop-blur-sm">
+        <div className="w-0 h-0 border-l-[16px] border-l-white/20 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1" />
+      </div>
     </div>
   </div>
 );
+
+const VideoEmbed = ({ videoId }: { videoId: string }) => {
+  const [isInView, setIsInView] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 mb-12">
+      <div
+        ref={containerRef}
+        className="relative aspect-video w-full overflow-hidden rounded-sm shadow-2xl bg-black"
+      >
+        {!isLoaded && <VideoSkeleton />}
+        {isInView && (
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}`}
+            title="YouTube video player"
+            className={`absolute top-0 left-0 w-full h-full transition-opacity duration-700 ${isLoaded ? "opacity-100" : "opacity-0"}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            onLoad={() => setIsLoaded(true)}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
 
 const StillsCarousel = ({
   title,
@@ -376,12 +416,12 @@ export default function App() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-black border-t border-white/10 py-12 flex justify-center">
+        <footer className="bg-[#f5f5f5] py-12 flex justify-center">
           <a
             href={s.instagram_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-white hover:scale-110 transition-transform"
+            className="text-black/70 hover:text-black hover:scale-110 transition-all"
           >
             <Instagram className="w-8 h-8" />
           </a>

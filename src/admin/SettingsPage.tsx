@@ -159,7 +159,7 @@ export default function SettingsPage() {
             <Field label="Ubicacion" value={settings.location} onChange={(v) => update("location", v)} placeholder="Buenos Aires, Argentina" />
             <Field label="Telefono" value={settings.phone} onChange={(v) => update("phone", v)} placeholder="+5491169464252" />
             <Field label="Email" value={settings.email} onChange={(v) => update("email", v)} placeholder="info@profundidadplana.com" type="email" />
-            <Field label="URL de Instagram" value={settings.instagram_url} onChange={(v) => update("instagram_url", v)} placeholder="https://instagram.com/profundidadplana" />
+            <Field label="URL de Instagram" value={settings.instagram_url} onChange={(v) => update("instagram_url", v)} placeholder="https://www.instagram.com/profundidad.plana/" />
           </div>
         </SettingsSection>
 

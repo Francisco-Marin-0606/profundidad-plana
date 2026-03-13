@@ -9,8 +9,7 @@ import {
 import type { SiteContent } from "./types";
 
 const DEFAULT_SETTINGS = {
-  hero_image:
-    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=2070&auto=format&fit=crop",
+  hero_image: "/hero-bg.png",
   location: "Buenos Aires, Argentina.",
   phone: "+5491169464252",
   email: "info@profundidadplana.com",
@@ -277,7 +276,7 @@ export default function App() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-center px-6 md:px-10 pt-20 md:pt-0">
+      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-end px-6 md:px-10 pb-16 md:pb-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

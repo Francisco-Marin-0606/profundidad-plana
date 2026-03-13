@@ -280,12 +280,12 @@ export default function App() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-center">
+      <section className="relative z-10 h-screen w-full flex flex-col items-center justify-center pt-32 md:pt-40">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="text-center px-4"
+          className="text-center px-4 hero-text-shadow"
         >
           <h1 className="text-5xl md:text-8xl font-extralight tracking-tight mb-6">
             Profundidad Plana

@@ -5,10 +5,24 @@ import {
   Pencil,
   Trash2,
   X,
-  ArrowUp,
-  ArrowDown,
   Film,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
 import type { Video } from "../types";
 
@@ -51,14 +65,10 @@ function VideoModal({
           <h3 className="text-lg font-medium">
             {isEdit ? "Editar Video" : "Nuevo Video"}
           </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
@@ -73,7 +83,6 @@ function VideoModal({
               autoFocus
             />
           </div>
-
           {previewId && /^[\w-]{11}$/.test(previewId) && (
             <div className="aspect-video rounded-lg overflow-hidden bg-white/5">
               <img
@@ -84,7 +93,6 @@ function VideoModal({
               />
             </div>
           )}
-
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
               Titulo (opcional)
@@ -97,24 +105,84 @@ function VideoModal({
               placeholder="Nombre del video"
             />
           </div>
-
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-            >
+            <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={!youtubeInput.trim()}
-              className="px-5 py-2.5 rounded-lg text-sm bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-40 text-white font-medium transition-all"
-            >
+            <button type="submit" disabled={!youtubeInput.trim()} className="px-5 py-2.5 rounded-lg text-sm bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-40 text-white font-medium transition-all">
               {isEdit ? "Guardar" : "Agregar"}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function SortableVideoItem({
+  video,
+  onEdit,
+  onDelete,
+}: {
+  video: Video;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: video.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-4 hover:bg-white/[0.07] transition-colors group ${
+        isDragging ? "shadow-2xl shadow-brand-orange/10 ring-1 ring-brand-orange/30" : ""
+      }`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-1 text-gray-600 hover:text-gray-300 transition-colors touch-none"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+
+      <img
+        src={`https://img.youtube.com/vi/${video.youtube_id}/default.jpg`}
+        alt=""
+        className="w-20 h-14 object-cover rounded-lg flex-shrink-0"
+        referrerPolicy="no-referrer"
+      />
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">
+          {video.title || video.youtube_id}
+        </p>
+        <p className="text-xs text-gray-500 mt-0.5">{video.youtube_id}</p>
+      </div>
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={onEdit}
+          className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-brand-orange transition-all"
+          title="Editar"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
+          title="Eliminar"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -125,6 +193,10 @@ export default function VideosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Partial<Video> | null | "new">(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const loadVideos = async () => {
     try {
@@ -157,23 +229,31 @@ export default function VideosPage() {
     await loadVideos();
   };
 
-  const handleMove = async (index: number, direction: "up" | "down") => {
-    const swapIndex = direction === "up" ? index - 1 : index + 1;
-    if (swapIndex < 0 || swapIndex >= videos.length) return;
-    const a = videos[index];
-    const b = videos[swapIndex];
-    await Promise.all([
-      api.put("/api/admin/videos", { id: a.id, sort_order: b.sort_order }),
-      api.put("/api/admin/videos", { id: b.id, sort_order: a.sort_order }),
-    ]);
-    await loadVideos();
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = videos.findIndex((v) => v.id === active.id);
+    const newIndex = videos.findIndex((v) => v.id === over.id);
+    const reordered = arrayMove(videos, oldIndex, newIndex);
+    setVideos(reordered);
+
+    const updates = reordered.map((v, i) => ({
+      id: v.id,
+      sort_order: i,
+    }));
+    await Promise.all(
+      updates.map((u) => api.put("/api/admin/videos", u))
+    );
   };
 
-  const filtered = videos.filter(
-    (v) =>
-      v.title.toLowerCase().includes(search.toLowerCase()) ||
-      v.youtube_id.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = search
+    ? videos.filter(
+        (v) =>
+          v.title.toLowerCase().includes(search.toLowerCase()) ||
+          v.youtube_id.toLowerCase().includes(search.toLowerCase())
+      )
+    : videos;
 
   if (loading) {
     return (
@@ -196,20 +276,16 @@ export default function VideosPage() {
         </button>
       </div>
 
-      {/* Stats */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6 flex items-center gap-4">
         <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
           <Film className="w-5 h-5 text-purple-400" />
         </div>
         <div>
           <p className="text-xl font-semibold">{videos.length}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wider">
-            Videos totales
-          </p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">Videos totales</p>
         </div>
       </div>
 
-      {/* Search */}
       <div className="relative mb-6">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input
@@ -221,70 +297,26 @@ export default function VideosPage() {
         />
       </div>
 
-      {/* Video list */}
-      <div className="space-y-2">
-        {filtered.map((video, index) => (
-          <div
-            key={video.id}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-4 hover:bg-white/[0.07] transition-colors group"
-          >
-            <img
-              src={`https://img.youtube.com/vi/${video.youtube_id}/default.jpg`}
-              alt=""
-              className="w-20 h-14 object-cover rounded-lg flex-shrink-0"
-              referrerPolicy="no-referrer"
-            />
-
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                {video.title || video.youtube_id}
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">{video.youtube_id}</p>
-            </div>
-
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => handleMove(index, "up")}
-                disabled={index === 0}
-                className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all"
-                title="Mover arriba"
-              >
-                <ArrowUp className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleMove(index, "down")}
-                disabled={index === filtered.length - 1}
-                className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all"
-                title="Mover abajo"
-              >
-                <ArrowDown className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setModal(video)}
-                className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-brand-orange transition-all"
-                title="Editar"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(video.id)}
-                className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
-                title="Eliminar"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={filtered.map((v) => v.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {filtered.map((video) => (
+              <SortableVideoItem
+                key={video.id}
+                video={video}
+                onEdit={() => setModal(video)}
+                onDelete={() => handleDelete(video.id)}
+              />
+            ))}
+            {filtered.length === 0 && (
+              <div className="text-center py-16 text-gray-500">
+                {search ? "No se encontraron videos" : "No hay videos todavia"}
+              </div>
+            )}
           </div>
-        ))}
+        </SortableContext>
+      </DndContext>
 
-        {filtered.length === 0 && (
-          <div className="text-center py-16 text-gray-500">
-            {search ? "No se encontraron videos" : "No hay videos todavia"}
-          </div>
-        )}
-      </div>
-
-      {/* Modal */}
       {modal !== null && (
         <VideoModal
           video={modal === "new" ? {} : modal}

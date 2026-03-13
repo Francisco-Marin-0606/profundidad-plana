@@ -212,7 +212,7 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-light">Configuracion</h2>
+        <h2 className="text-2xl font-bold">Configuracion</h2>
         <button
           onClick={handleSave}
           disabled={saving}

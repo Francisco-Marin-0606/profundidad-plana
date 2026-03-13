@@ -186,7 +186,7 @@ export default function VideosPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-light">Videos</h2>
+        <h2 className="text-2xl font-bold">Videos</h2>
         <button
           onClick={() => setModal("new")}
           className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all"

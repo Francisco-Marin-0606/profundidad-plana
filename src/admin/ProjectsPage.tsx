@@ -86,7 +86,7 @@ function AddImageInput({
 }: {
   onAdd: (url: string) => void;
 }) {
-  const [mode, setMode] = useState<"url" | "file">("url");
+  const [mode, setMode] = useState<"url" | "file">("file");
   const [url, setUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
